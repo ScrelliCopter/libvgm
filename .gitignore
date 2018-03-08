@@ -18,6 +18,8 @@ build*/
 [Oo]bj/
 *.exe
 install/
+Debug/
+Release/
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
@@ -98,3 +100,6 @@ $RECYCLE.BIN/
 # Mac crap
 .DS_Store
 
+
+*.vgm
+*.vgz
