@@ -160,6 +160,8 @@ typedef struct InternalState
 	VGM_HEADER VGMHdr;
 	UINT32 VGMSmplPos;
 	UINT32 renderSmplPos;
+	double flSpeedMul;
+	double flRenderPos;
 	VGM_CHIPDEV VGMChips[CHIP_COUNT][2];
 	VGM_DACSTRM DACStreams[DACSTRM_COUNT];
 	UINT32 sampleRate;
@@ -222,6 +224,9 @@ InternalState* InternalOpen(gzFile hFile, UINT32 rate, WAVE_32BS* buf, UINT32 bu
 	s->smplSize = sizeof(WAVE_32BS);
 	s->smplAlloc = bufLen / s->smplSize;
 	s->smplData = buf;
+
+	// groovy speed hack.
+	s->flSpeedMul = 44100.0 / (double)rate;
 
 	InitVGMChips(s);
 
@@ -344,7 +349,6 @@ void InitVGMChips(InternalState* s)
 		devCfg.flags = (chpClk & 0x80000000) >> 31;
 		devCfg.clock = chpClk & ~0xC0000000;
 		devCfg.smplRate = s->sampleRate;
-		//devCfg.smplRate = 44100;
 		switch(curChip)
 		{
 		case DEVID_SN76496:
@@ -675,14 +679,12 @@ void InitVGMChips(InternalState* s)
 		//cDev->defInf.devDef->Reset(cDev->defInf.dataPtr);
 		
 		Resmpl_SetVals(&cDev->resmpl, 0xFF, 0x100, s->sampleRate);
-		//Resmpl_SetVals(&cDev->resmpl, 0xFF, 0x100, 44100);
 		Resmpl_DevConnect(&cDev->resmpl, &cDev->defInf);
 		Resmpl_Init(&cDev->resmpl);
 		clDev = cDev->linkDev;
 		while(clDev != NULL)
 		{
 			Resmpl_SetVals(&clDev->resmpl, 0xFF, 0x100, s->sampleRate);
-			//Resmpl_SetVals(&clDev->resmpl, 0xFF, 0x100, 44100);
 			Resmpl_DevConnect(&clDev->resmpl, &clDev->defInf);
 			Resmpl_Init(&clDev->resmpl);
 			clDev = clDev->linkDev;
@@ -694,7 +696,6 @@ void InitVGMChips(InternalState* s)
 	devCfg.flags = 0x00;
 	devCfg.clock = 0x00;
 	devCfg.smplRate = s->sampleRate;
-	//devCfg.smplRate = 44100;
 	for (curChip = 0x00; curChip < DACSTRM_COUNT; curChip ++)
 	{
 		devInf = &s->DACStreams[curChip].defInf;
@@ -707,6 +708,7 @@ void InitVGMChips(InternalState* s)
 	
 	s->VGMSmplPos = 0;
 	s->renderSmplPos = 0;
+	s->flRenderPos = 0.0;
 	s->VGMPos = s->VGMHdr.lngDataOffset;
 	s->VGMPos += s->VGMPos ? 0x34 : 0x40;
 	
@@ -1465,7 +1467,9 @@ void ReadVGMFile(InternalState* s, UINT32 samples)
 	if (! s->VGMPos)
 		return;
 	
-	s->renderSmplPos += samples;
+	s->flRenderPos += (double)samples * s->flSpeedMul;
+	//s->renderSmplPos += samples;
+	s->renderSmplPos = (UINT32)s->flRenderPos;
 	while(s->VGMSmplPos <= s->renderSmplPos)
 	{
 		cmdLen = DoVgmCommand(s, s->VGMData[s->VGMPos], &s->VGMData[s->VGMPos]);
